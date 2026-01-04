@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tasktracker/pages/splash_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:tasktracker/state/theme_notifier.dart';
-import 'package:tasktracker/utils/network.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // new
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,16 +24,36 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  late final Connectivity _connectivity;
+  bool _hasInternet = true;
+
   @override
   void initState() {
     super.initState();
+    _connectivity = Connectivity();
     _checkInternet();
+    _connectivity.onConnectivityChanged.listen((result) {
+      final isConnected = result != ConnectivityResult.none;
+      if (isConnected != _hasInternet && mounted) {
+        setState(() {
+          _hasInternet = isConnected;
+        });
+        if (!isConnected) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No internet connection'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    });
   }
 
   Future<void> _checkInternet() async {
-    final hasInternet = await hasRealInternet();
-
-    if (!hasInternet && mounted) {
+    final result = await _connectivity.checkConnectivity();
+    if (result == ConnectivityResult.none && mounted) {
+      setState(() => _hasInternet = false);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
