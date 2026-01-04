@@ -87,118 +87,6 @@ class _TasksState extends State<Tasks> {
     }
   }
 
-  Future<List<dynamic>> _fetchSubtasks(String taskId) async {
-    try {
-      final res = await Supabase.instance.client
-          .from('subtasks')
-          .select()
-          .eq('task_id', taskId)
-          .order('created_at', ascending: false);
-      return res;
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<void> _toggleSubtask(String subId, String status) async {
-    final next = status == 'done' ? 'todo' : 'done';
-    await Supabase.instance.client
-        .from('subtasks')
-        .update({'status': next})
-        .eq('id', subId);
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _addSubtask(String taskId, String title) async {
-    if (title.trim().isEmpty) return;
-    await Supabase.instance.client
-        .from('subtasks')
-        .insert({'task_id': taskId, 'title': title.trim()});
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _deleteSubtask(String subId) async {
-    await Supabase.instance.client.from('subtasks').delete().eq('id', subId);
-    if (mounted) setState(() {});
-  }
-
-  void _openSubtasksSheet(Map task) {
-    final controller = TextEditingController();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 16,
-          ),
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Subtasks for "${task['title']}"',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: FutureBuilder<List<dynamic>>(
-                    future: _fetchSubtasks(task['id']),
-                    builder: (context, snapshot) {
-                      final list = snapshot.data ?? [];
-                      if (!snapshot.hasData) {
-                        return const Center(
-                            child: CircularProgressIndicator());
-                      }
-                      return ListView.builder(
-                        itemCount: list.length,
-                        itemBuilder: (context, i) {
-                          final sub = list[i];
-                          return ListTile(
-                            leading: Checkbox(
-                              value: sub['status'] == 'done',
-                              onChanged: (_) =>
-                                  _toggleSubtask(sub['id'], sub['status']),
-                            ),
-                            title: Text(sub['title']),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _deleteSubtask(sub['id']),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: controller,
-                        decoration:
-                        const InputDecoration(hintText: 'New subtask'),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      onPressed: () async {
-                        await _addSubtask(task['id'], controller.text);
-                        controller.clear();
-                      },
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Future<List<dynamic>> _fetchTasks() async {
     final response = await Supabase.instance.client
         .from('tasks')
@@ -241,6 +129,7 @@ class _TasksState extends State<Tasks> {
                   .delete()
                   .eq('id', taskId);
               setState(() {});
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text("Task \"$taskTitle\" deleted"),
@@ -465,7 +354,7 @@ class _TasksState extends State<Tasks> {
                                                   backgroundColor:
                                                   _priorityColor(
                                                       task['priority'])
-                                                      .withOpacity(0.15),
+                                                      .withValues(alpha: 0.15),
                                                   labelStyle: TextStyle(
                                                       color: _priorityColor(
                                                           task['priority'])),
@@ -520,8 +409,6 @@ class _TasksState extends State<Tasks> {
                                           return _setDueDate(task['id']);
                                         case 'due_clear':
                                           return _clearDueDate(task['id']);
-                                        case 'subs':
-                                          return _openSubtasksSheet(task);
                                         case 'del':
                                           return _deleteTask(
                                               task['id'], task['title']);
@@ -544,10 +431,6 @@ class _TasksState extends State<Tasks> {
                                       PopupMenuItem(
                                           value: 'due_clear',
                                           child: Text('Clear due date')),
-                                      PopupMenuDivider(),
-                                      PopupMenuItem(
-                                          value: 'subs',
-                                          child: Text('Manage subtasks')),
                                       PopupMenuDivider(),
                                       PopupMenuItem(
                                           value: 'del', child: Text('Delete')),

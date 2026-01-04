@@ -11,16 +11,62 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final emailController = TextEditingController();
+  final usernameController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool loading = false;
 
+  // Username check state
+  bool usernameAvailable = false;
+  bool checkingUsername = false;
+  String? usernameError;
+
+  Future<void> _checkUsername(String username) async {
+    if (username.trim().length < 3) {
+      setState(() {
+        usernameAvailable = false;
+        usernameError = 'Too short';
+      });
+      return;
+    }
+
+    setState(() {
+      checkingUsername = true;
+      usernameError = null;
+    });
+
+    try {
+      final res = await Supabase.instance.client
+          .from('profiles')
+          .select('id')
+          .eq('username', username.trim())
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        usernameAvailable = res == null;
+        usernameError = res == null ? null : 'Username already taken';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => usernameError = 'Error checking username');
+    } finally {
+      if (mounted) setState(() => checkingUsername = false);
+    }
+  }
   Future<void> _signup() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (passwordController.text.trim() != confirmPasswordController.text.trim()) {
       _showError("Passwords do not match");
+      return;
+    }
+
+    // Username Availability
+    if (!usernameAvailable) {
+      _showError("Username not available");
       return;
     }
 
@@ -32,7 +78,15 @@ class _SignupScreenState extends State<SignupScreen> {
         password: passwordController.text.trim(),
       );
 
-      if (response.user != null) {
+      final user = response.user;
+
+      if (user != null) {
+        //create profile
+        await Supabase.instance.client.from('profiles').insert({
+          'id': user.id,
+          'username': usernameController.text.trim(),
+          'email': emailController.text.trim(),
+        });
         _showSuccess("Account created! Please check your email to verify.");
         Navigator.pushReplacement(
           context,
@@ -86,6 +140,41 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    //username
+                    TextFormField(
+                      controller: usernameController,
+                      decoration: InputDecoration(
+                        labelText: 'Username',
+                        prefixIcon: const Icon(Icons.person),
+                        suffixIcon: checkingUsername
+                            ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                            : usernameAvailable
+                            ? const Icon(Icons.check, color: Colors.green)
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.deepOrange,
+                            width: 2,
+                          ),
+                        ),
+                        floatingLabelStyle: TextStyle(color: Colors.deepOrange),
+                      ),
+                      onChanged: _checkUsername,
+                      validator: (_) => usernameError,
+                    ),
+                    const SizedBox(height: 16),
 
                     // Email
                     TextFormField(

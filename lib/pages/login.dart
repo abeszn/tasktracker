@@ -12,7 +12,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final emailController = TextEditingController();
+  final identifierController = TextEditingController(); //username or email
   final passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool loading = false;
@@ -23,8 +23,32 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => loading = true);
 
     try {
+      String input = identifierController.text.trim();
+      String emailToUse = input;
+
+      // check if input is an email
+      bool isEmail = input.contains('@');
+
+      if (!isEmail) {
+        // Treat input as username, fetch email from profiles
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('email')
+            .eq('username', input)
+            .maybeSingle();
+
+        if (profile == null || profile['email'] == null) {
+          if (!mounted) return;
+          _showError('Username not found');
+          setState(() => loading = false);
+          return;
+        }
+
+        emailToUse = profile['email'];
+      }
+
       final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: emailController.text.trim(),
+        email: emailToUse,
         password: passwordController.text.trim(),
       );
 
@@ -35,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (_) => const Dashboard()),
         );
       } else {
-        _showError('Invalid email or password');
+        _showError('Invalid credentials');
       }
     } catch (e) {
       _showError(e.toString());
@@ -77,12 +101,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Email field
+                    // Email or username field
                     TextFormField(
-                      controller: emailController,
+                      controller: identifierController,
                       decoration: InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: const Icon(Icons.email),
+                        labelText: 'Email or Username',
+                        prefixIcon: const Icon(Icons.person),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -95,13 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         floatingLabelStyle: TextStyle(color: Colors.deepOrange),
                       ),
-                      keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Enter your email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Enter a valid email';
+                          return 'Enter your email or username';
                         }
                         return null;
                       },
